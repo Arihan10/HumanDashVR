@@ -25,7 +25,7 @@ public class ProjectileManager : MonoBehaviour
         {
             if (Vector3.Distance(spawnPoint.transform.position, player.transform.position) <= activationDistance &&
                 timeFromLastProjectile >= coolDown &&
-                player.transform.position.x <= spawnPoint.transform.position.x)
+                player.transform.position.z <= spawnPoint.transform.position.z)
             {
                 timeFromLastProjectile = 0f;
                 GameObject projectileInstance = Instantiate(projectile, spawnPoint.transform.position, Quaternion.identity);

@@ -23,7 +23,7 @@ public class FullBodyController : MonoBehaviour {
     // Settings
     public float scaleFactor = 2f;
     public float visibilityThreshold = 0.5f;
-    public float interpolationSpeed = 10f; 
+    public float interpolationSpeed = 10f;
 
     // State tracking
     private bool isUpdating = false;
@@ -60,18 +60,18 @@ public class FullBodyController : MonoBehaviour {
         // Initial data fetch
         await UpdatePoseFromCV();
 
-        time = Time.time; 
+        time = Time.time;
     }
 
     async void Update() {
-        InterpolatePositions(); 
+        InterpolatePositions();
 
         // Only start a new update if we're not already processing one
         if (!isUpdating) {
             _ = UpdatePoseFromCV();
 
             Debug.Log(Time.time - time);
-            time = Time.time; 
+            time = Time.time;
         }
     }
 
