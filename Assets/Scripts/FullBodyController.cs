@@ -64,12 +64,29 @@ public class FullBodyController : MonoBehaviour {
     }
 
     async void Update() {
+        InterpolatePositions(); 
+
         // Only start a new update if we're not already processing one
         if (!isUpdating) {
-            await UpdatePoseFromCV();
+            _ = UpdatePoseFromCV();
 
             Debug.Log(Time.time - time);
             time = Time.time; 
+        }
+    }
+
+    private void InterpolatePositions() {
+        float deltaTime = Time.deltaTime;
+
+        foreach (var target in targetPositions.Keys) {
+            if (targetVisibility[target]) {
+                // Only interpolate if we have valid target data
+                target.position = Vector3.Lerp(
+                    target.position,
+                    targetPositions[target],
+                    deltaTime * interpolationSpeed
+                );
+            }
         }
     }
 
@@ -80,7 +97,7 @@ public class FullBodyController : MonoBehaviour {
             // Get the parsed skeleton data
             Dictionary<string, Vector3> jointData = await SkeletonDataParser.ParseSkeletonData();
 
-            Debug.Log(jointData.Count); 
+            Debug.Log(jointData.Count);
 
             // Update hip position
             if (jointData.ContainsKey("LEFT_HIP") && jointData.ContainsKey("RIGHT_HIP")) {
@@ -91,47 +108,55 @@ public class FullBodyController : MonoBehaviour {
                     Vector3 leftHip = jointData["LEFT_HIP"];
                     Vector3 rightHip = jointData["RIGHT_HIP"];
                     Vector3 hipCenter = Vector3.Lerp(leftHip, rightHip, 0.5f);
-                    hipTarget.position = ConvertToWorldSpace(hipCenter);
+                    targetPositions[hipTarget] = ConvertToWorldSpace(hipCenter);
+                    targetVisibility[hipTarget] = true;
+                } else {
+                    targetVisibility[hipTarget] = false;
                 }
             }
 
             // Update left hand
             if (jointData.ContainsKey("LEFT_WRIST")) {
                 float visibility = await SkeletonDataParser.GetJointVisibility("LEFT_WRIST");
-                if (visibility > visibilityThreshold) {
-                    leftHandTarget.position = ConvertToWorldSpace(jointData["LEFT_WRIST"]);
+                targetVisibility[leftHandTarget] = visibility > visibilityThreshold;
+                if (targetVisibility[leftHandTarget]) {
+                    targetPositions[leftHandTarget] = ConvertToWorldSpace(jointData["LEFT_WRIST"]);
                 }
             }
 
             // Update right hand
             if (jointData.ContainsKey("RIGHT_WRIST")) {
                 float visibility = await SkeletonDataParser.GetJointVisibility("RIGHT_WRIST");
-                if (visibility > visibilityThreshold) {
-                    rightHandTarget.position = ConvertToWorldSpace(jointData["RIGHT_WRIST"]);
+                targetVisibility[rightHandTarget] = visibility > visibilityThreshold;
+                if (targetVisibility[rightHandTarget]) {
+                    targetPositions[rightHandTarget] = ConvertToWorldSpace(jointData["RIGHT_WRIST"]);
                 }
             }
 
             // Update left foot
             if (jointData.ContainsKey("LEFT_ANKLE")) {
                 float visibility = await SkeletonDataParser.GetJointVisibility("LEFT_ANKLE");
-                if (visibility > visibilityThreshold) {
-                    leftFootTarget.position = ConvertToWorldSpace(jointData["LEFT_ANKLE"]);
+                targetVisibility[leftFootTarget] = visibility > visibilityThreshold;
+                if (targetVisibility[leftFootTarget]) {
+                    targetPositions[leftFootTarget] = ConvertToWorldSpace(jointData["LEFT_ANKLE"]);
                 }
             }
 
             // Update right foot
             if (jointData.ContainsKey("RIGHT_ANKLE")) {
                 float visibility = await SkeletonDataParser.GetJointVisibility("RIGHT_ANKLE");
-                if (visibility > visibilityThreshold) {
-                    rightFootTarget.position = ConvertToWorldSpace(jointData["RIGHT_ANKLE"]);
+                targetVisibility[rightFootTarget] = visibility > visibilityThreshold;
+                if (targetVisibility[rightFootTarget]) {
+                    targetPositions[rightFootTarget] = ConvertToWorldSpace(jointData["RIGHT_ANKLE"]);
                 }
             }
 
             // Update head
             if (jointData.ContainsKey("NOSE")) {
                 float visibility = await SkeletonDataParser.GetJointVisibility("NOSE");
-                if (visibility > visibilityThreshold) {
-                    headTarget.position = ConvertToWorldSpace(jointData["NOSE"]);
+                targetVisibility[headTarget] = visibility > visibilityThreshold;
+                if (targetVisibility[headTarget]) {
+                    targetPositions[headTarget] = ConvertToWorldSpace(jointData["NOSE"]);
                 }
             }
         }
