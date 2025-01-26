@@ -1,59 +1,152 @@
 using System.Collections.Generic;
 using UnityEngine.Animations.Rigging;
 using UnityEngine;
+using System.Threading.Tasks;
 
 public class FullBodyController : MonoBehaviour {
     // References to all your IK components
-    public TwoBoneIKConstraint leftArmIK;   // Drag LeftArmIK object here
-    public TwoBoneIKConstraint rightArmIK;  // Drag RightArmIK object here
-    public TwoBoneIKConstraint leftLegIK;   // Drag LeftLegIK object here
-    public TwoBoneIKConstraint rightLegIK;  // Drag RightLegIK object here
-    public ChainIKConstraint spineIK;  // Drag SpineIK object here
+    public TwoBoneIKConstraint leftArmIK;
+    public TwoBoneIKConstraint rightArmIK;
+    public TwoBoneIKConstraint leftLegIK;
+    public TwoBoneIKConstraint rightLegIK;
+    public ChainIKConstraint spineIK;
+    public ChainIKConstraint hipIK;
 
     // References to your target objects
-    public Transform leftHandTarget;   // Drag LeftHand_Target here
-    public Transform rightHandTarget;  // Drag RightHand_Target here
-    public Transform leftFootTarget;   // Drag LeftFoot_Target here
-    public Transform rightFootTarget;  // Drag RightFoot_Target here
-    public Transform hipTarget;        // Drag Hip_Target here
-    public Transform headTarget;        // Drag Head_Target here
+    public Transform leftHandTarget;
+    public Transform rightHandTarget;
+    public Transform leftFootTarget;
+    public Transform rightFootTarget;
+    public Transform hipTarget;
+    public Transform headTarget;
 
     // Settings
     public float scaleFactor = 2f;
+    public float visibilityThreshold = 0.5f;
+    public float interpolationSpeed = 10f; 
 
-    // This is the method your OpenCV script will call
-    public void UpdatePoseFromCV(Dictionary<string, Vector3> jointData) {
-        // Convert and apply OpenCV data to targets
-        if (jointData.TryGetValue("leftHand", out Vector3 leftHandPos))
-            leftHandTarget.position = ConvertToWorldSpace(leftHandPos);
+    // State tracking
+    private bool isUpdating = false;
 
-        if (jointData.TryGetValue("rightHand", out Vector3 rightHandPos))
-            rightHandTarget.position = ConvertToWorldSpace(rightHandPos);
+    // Data
+    private Dictionary<Transform, Vector3> targetPositions = new Dictionary<Transform, Vector3>();
+    private Dictionary<Transform, bool> targetVisibility = new Dictionary<Transform, bool>();
 
-        if (jointData.TryGetValue("leftFoot", out Vector3 leftFootPos))
-            leftFootTarget.position = ConvertToWorldSpace(leftFootPos);
+    float time;
 
-        if (jointData.TryGetValue("rightFoot", out Vector3 rightFootPos))
-            rightFootTarget.position = ConvertToWorldSpace(rightFootPos);
-
-        if (jointData.TryGetValue("hip", out Vector3 hipPos))
-            hipTarget.position = ConvertToWorldSpace(hipPos);
-
-        if (jointData.TryGetValue("head", out Vector3 headPos))
-            headTarget.position = ConvertToWorldSpace(headPos);
+    private void Awake() {
+        // Initialize target positions with current positions
+        InitializeTargetPositions();
     }
 
-    /*private Vector3 ConvertToWorldSpace(Vector3 screenPos) {
-        float x = (screenPos.x / Screen.width - 0.5f) * 2f;
-        float y = -(screenPos.y / Screen.height - 0.5f) * 2f;
-        return new Vector3(x * scaleFactor, y * scaleFactor, 0);
-    }*/
+    private void InitializeTargetPositions() {
+        targetPositions[leftHandTarget] = leftHandTarget.position;
+        targetPositions[rightHandTarget] = rightHandTarget.position;
+        targetPositions[leftFootTarget] = leftFootTarget.position;
+        targetPositions[rightFootTarget] = rightFootTarget.position;
+        targetPositions[hipTarget] = hipTarget.position;
+        targetPositions[headTarget] = headTarget.position;
+
+        // Initialize visibility states
+        targetVisibility[leftHandTarget] = false;
+        targetVisibility[rightHandTarget] = false;
+        targetVisibility[leftFootTarget] = false;
+        targetVisibility[rightFootTarget] = false;
+        targetVisibility[hipTarget] = false;
+        targetVisibility[headTarget] = false;
+    }
+
+    private async void Start() {
+        // Initial data fetch
+        await UpdatePoseFromCV();
+
+        time = Time.time; 
+    }
+
+    async void Update() {
+        // Only start a new update if we're not already processing one
+        if (!isUpdating) {
+            await UpdatePoseFromCV();
+
+            Debug.Log(Time.time - time);
+            time = Time.time; 
+        }
+    }
+
+    private async Task UpdatePoseFromCV() {
+        isUpdating = true;
+
+        try {
+            // Get the parsed skeleton data
+            Dictionary<string, Vector3> jointData = await SkeletonDataParser.ParseSkeletonData();
+
+            Debug.Log(jointData.Count); 
+
+            // Update hip position
+            if (jointData.ContainsKey("LEFT_HIP") && jointData.ContainsKey("RIGHT_HIP")) {
+                float leftHipVisibility = await SkeletonDataParser.GetJointVisibility("LEFT_HIP");
+                float rightHipVisibility = await SkeletonDataParser.GetJointVisibility("RIGHT_HIP");
+
+                if (leftHipVisibility > visibilityThreshold && rightHipVisibility > visibilityThreshold) {
+                    Vector3 leftHip = jointData["LEFT_HIP"];
+                    Vector3 rightHip = jointData["RIGHT_HIP"];
+                    Vector3 hipCenter = Vector3.Lerp(leftHip, rightHip, 0.5f);
+                    hipTarget.position = ConvertToWorldSpace(hipCenter);
+                }
+            }
+
+            // Update left hand
+            if (jointData.ContainsKey("LEFT_WRIST")) {
+                float visibility = await SkeletonDataParser.GetJointVisibility("LEFT_WRIST");
+                if (visibility > visibilityThreshold) {
+                    leftHandTarget.position = ConvertToWorldSpace(jointData["LEFT_WRIST"]);
+                }
+            }
+
+            // Update right hand
+            if (jointData.ContainsKey("RIGHT_WRIST")) {
+                float visibility = await SkeletonDataParser.GetJointVisibility("RIGHT_WRIST");
+                if (visibility > visibilityThreshold) {
+                    rightHandTarget.position = ConvertToWorldSpace(jointData["RIGHT_WRIST"]);
+                }
+            }
+
+            // Update left foot
+            if (jointData.ContainsKey("LEFT_ANKLE")) {
+                float visibility = await SkeletonDataParser.GetJointVisibility("LEFT_ANKLE");
+                if (visibility > visibilityThreshold) {
+                    leftFootTarget.position = ConvertToWorldSpace(jointData["LEFT_ANKLE"]);
+                }
+            }
+
+            // Update right foot
+            if (jointData.ContainsKey("RIGHT_ANKLE")) {
+                float visibility = await SkeletonDataParser.GetJointVisibility("RIGHT_ANKLE");
+                if (visibility > visibilityThreshold) {
+                    rightFootTarget.position = ConvertToWorldSpace(jointData["RIGHT_ANKLE"]);
+                }
+            }
+
+            // Update head
+            if (jointData.ContainsKey("NOSE")) {
+                float visibility = await SkeletonDataParser.GetJointVisibility("NOSE");
+                if (visibility > visibilityThreshold) {
+                    headTarget.position = ConvertToWorldSpace(jointData["NOSE"]);
+                }
+            }
+        }
+        catch (System.Exception e) {
+            Debug.LogError($"Error updating pose: {e.Message}");
+        }
+        finally {
+            isUpdating = false;
+        }
+    }
 
     private Vector3 ConvertToWorldSpace(Vector3 position) {
-        // Assuming OpenCV sends coordinates in a reasonable range
         return new Vector3(
-            position.x * scaleFactor,
-            position.y * scaleFactor,
+            (1 - position.x - 0.5f) * scaleFactor,
+            (1 - position.y - 0.5f) * scaleFactor,
             position.z * scaleFactor
         );
     }
