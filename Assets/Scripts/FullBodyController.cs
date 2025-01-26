@@ -172,7 +172,8 @@ public class FullBodyController : MonoBehaviour {
         return new Vector3(
             (1 - position.x - 0.5f) * scaleFactor,
             (1 - position.y - 0.5f) * scaleFactor,
-            position.z * scaleFactor
+            // position.z * scaleFactor / 5f
+            0f
         );
     }
 }
